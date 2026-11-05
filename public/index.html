@@ -1352,20 +1352,20 @@ function avatarHtml(personId, anzeigename){
 
 /* ============================================================ Speicher */
 var Speicher = (function(){
-  var modus="lokal", daten={}, db=null, uid=null, kuerzel="", person="", zeit=0;
+  var modus="lokal", daten={}, db=null, uid=null, kuerzel="", person="", zeit=0, sync=0, kette=Promise.resolve();
 
   function lokalLaden(){
     try{ var s=window.localStorage;
       if(s){ s.setItem("t","t"); s.removeItem("t");
         var roh = JSON.parse(s.getItem(SCHLUESSEL)||"{}");
-        daten = roh.tage || {}; kuerzel = roh.kuerzel || ""; person = roh.person || ""; zeit = +roh.zeit || 0;
+        daten = roh.tage || {}; kuerzel = roh.kuerzel || ""; person = roh.person || ""; zeit = +roh.zeit || 0; sync = +roh.sync || 0;
         return true; } }
     catch(e){}
     return false;
   }
   function lokalSichern(){
     try{ window.localStorage.setItem(SCHLUESSEL,
-      JSON.stringify({tage:daten, kuerzel:kuerzel, person:person, zeit:zeit})); }
+      JSON.stringify({tage:daten, kuerzel:kuerzel, person:person, zeit:zeit, sync:sync})); }
     catch(e){}
   }
 
@@ -1415,7 +1415,7 @@ var Speicher = (function(){
     try{
       var a = await Netz.holen("action=mein&kennung="+encodeURIComponent(k));
       if(a && a.ok && a.daten && hatEintraege(a.daten) && (!hatEintraege(daten) || (+a.zeit||0) > zeit)){
-        daten = a.daten; zeit = +a.zeit||0; lokalSichern(); return true;
+        daten = a.daten; zeit = +a.zeit||0; sync = zeit; lokalSichern(); return true;
       }
     }catch(e){}
     return false;
@@ -1429,23 +1429,52 @@ var Speicher = (function(){
     return "";
   }
 
-  async function sichern(){
+  function sichern(){
     zeit = Date.now();
     lokalSichern();
     if(modus==="api"){
+      kette = kette.then(apiSichern, apiSichern);
+      return kette;
+    }
+    return dbSichern();
+  }
+
+  async function apiSichern(){
       var k = kennung();
       if(!k) return;
+      var dazu = false;
+      try{
+        var s = await Netz.holen("action=mein&kennung="+encodeURIComponent(k));
+        if(s && s.ok && s.daten && (+s.zeit||0) > sync){
+          Object.keys(s.daten).forEach(function(t){
+            if(t==="wochen"){
+              var w = s.daten.wochen || {};
+              daten.wochen = daten.wochen || {};
+              Object.keys(w).forEach(function(i){
+                if(!(i in daten.wochen)){ daten.wochen[i] = w[i]; dazu = true; }
+              });
+            } else if(!(t in daten)){ daten[t] = s.daten[t]; dazu = true; }
+          });
+        }
+      }catch(e){}
+      if(dazu){
+        lokalSichern();
+        try{ baueTage(); baueKarten(); baueWochen(); aktualisiere(false); }catch(e){}
+      }
       var b2 = bilanz();
+      var jetzt = Date.now();
       try{
         await Netz.senden({action:"stand", kennung:k,
           name: (personVon(person)||{}).name || kuerzel || "ohne Namen", person: person||"",
           tage:b2.tage, oeko:b2.total, sozial:b2.sozial, woche:b2.woche,
           schnitt: b2.tage ? Math.round(b2.total/b2.tage*10)/10 : 0,
-          daten: daten, zeit: zeit});
+          daten: daten, zeit: jetzt});
+        sync = jetzt; lokalSichern();
         if(typeof Team!=="undefined" && Team.frisch) Team.frisch();
       }catch(e){}
-      return;
-    }
+  }
+
+  async function dbSichern(){
     if(modus!=="db" || !uid) return;
     var b = bilanz();
     try{
@@ -2401,8 +2430,8 @@ document.getElementById("personWahl").addEventListener("change",function(){
   } else {
     Speicher.person = ""; if(v!=="andere") Speicher.kuerzel = "";
   }
+  if(v==="andere"){ feld.hidden=false; feld.value=""; feld.focus(); return; }
   zeigeKuerzel();
-  if(v==="andere"){ feld.focus(); return; }
   Speicher.holeEigene().then(function(neu){
     if(neu){ baueTage(); baueKarten(); baueWochen(); aktualisiere(false); }
     Speicher.sichern(); zeigGespeichert();
@@ -2415,7 +2444,10 @@ document.getElementById("kuerzelFeld").addEventListener("input",function(){
   clearTimeout(tippUhr);
   tippUhr = setTimeout(function(){
     Speicher.person = ""; Speicher.kuerzel = v;
-    Speicher.sichern();
+    Speicher.holeEigene().then(function(neu){
+      if(neu){ baueTage(); baueKarten(); baueWochen(); aktualisiere(false); }
+      Speicher.sichern();
+    });
     var p2 = document.getElementById("avaVorschau");
     if(p2) p2.innerHTML = v ? avatarHtml("", v) : "";
     standText(); zeigGespeichert();
@@ -2424,8 +2456,12 @@ document.getElementById("kuerzelFeld").addEventListener("input",function(){
 document.getElementById("kuerzelFeld").addEventListener("blur",function(){
   clearTimeout(tippUhr);
   var v = this.value.trim().slice(0,24);
+  if(Speicher.kuerzel === v && !Speicher.person) { zeigeKuerzel(); return; }
   Speicher.person = ""; Speicher.kuerzel = v;
-  Speicher.sichern(); zeigeKuerzel();
+  Speicher.holeEigene().then(function(neu){
+    if(neu){ baueTage(); baueKarten(); baueWochen(); aktualisiere(false); }
+    Speicher.sichern(); zeigeKuerzel();
+  });
 });
 document.getElementById("wieder").addEventListener("click",function(){ Team.zeichne(true); });
 

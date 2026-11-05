@@ -142,8 +142,8 @@ ersetze('''    Speicher.person = ""; if(v!=="andere") Speicher.kuerzel = "";
   if(v==="andere") feld.focus();
 });''', '''    Speicher.person = ""; if(v!=="andere") Speicher.kuerzel = "";
   }
+  if(v==="andere"){ feld.hidden=false; feld.value=""; feld.focus(); return; }
   zeigeKuerzel();
-  if(v==="andere"){ feld.focus(); return; }
   Speicher.holeEigene().then(function(neu){
     if(neu){ baueTage(); baueKarten(); baueWochen(); aktualisiere(false); }
     Speicher.sichern(); zeigGespeichert();
@@ -275,6 +275,95 @@ ersetze('''  Team.starte();
     });
   });
 })();''')
+
+
+# ------------------------------------------------ Mehrere Geräte gleichzeitig
+# Merkt sich, wann dieses Gerät zuletzt mit dem Server abgeglichen hat.
+ersetze('  var modus="lokal", daten={}, db=null, uid=null, kuerzel="", person="", zeit=0;',
+        '  var modus="lokal", daten={}, db=null, uid=null, kuerzel="", person="", zeit=0, sync=0, kette=Promise.resolve();')
+ersetze('person = roh.person || ""; zeit = +roh.zeit || 0;',
+        'person = roh.person || ""; zeit = +roh.zeit || 0; sync = +roh.sync || 0;')
+ersetze('JSON.stringify({tage:daten, kuerzel:kuerzel, person:person, zeit:zeit})); }',
+        'JSON.stringify({tage:daten, kuerzel:kuerzel, person:person, zeit:zeit, sync:sync})); }')
+ersetze('        daten = a.daten; zeit = +a.zeit||0; lokalSichern(); return true;',
+        '        daten = a.daten; zeit = +a.zeit||0; sync = zeit; lokalSichern(); return true;')
+
+# Speichern nacheinander statt gleichzeitig, und vor dem Senden Tage ergänzen,
+# die ein anderes Gerät derselben Person inzwischen eingetragen hat.
+ersetze("""  async function sichern(){
+    zeit = Date.now();
+    lokalSichern();
+    if(modus==="api"){
+      var k = kennung();
+      if(!k) return;
+      var b2 = bilanz();
+      try{""", """  function sichern(){
+    zeit = Date.now();
+    lokalSichern();
+    if(modus==="api"){
+      kette = kette.then(apiSichern, apiSichern);
+      return kette;
+    }
+    return dbSichern();
+  }
+
+  async function apiSichern(){
+      var k = kennung();
+      if(!k) return;
+      var dazu = false;
+      try{
+        var s = await Netz.holen("action=mein&kennung="+encodeURIComponent(k));
+        if(s && s.ok && s.daten && (+s.zeit||0) > sync){
+          Object.keys(s.daten).forEach(function(t){
+            if(t==="wochen"){
+              var w = s.daten.wochen || {};
+              daten.wochen = daten.wochen || {};
+              Object.keys(w).forEach(function(i){
+                if(!(i in daten.wochen)){ daten.wochen[i] = w[i]; dazu = true; }
+              });
+            } else if(!(t in daten)){ daten[t] = s.daten[t]; dazu = true; }
+          });
+        }
+      }catch(e){}
+      if(dazu){
+        lokalSichern();
+        try{ baueTage(); baueKarten(); baueWochen(); aktualisiere(false); }catch(e){}
+      }
+      var b2 = bilanz();
+      var jetzt = Date.now();
+      try{""")
+ersetze("""          daten: daten, zeit: zeit});
+        if(typeof Team!=="undefined" && Team.frisch) Team.frisch();
+      }catch(e){}
+      return;
+    }
+    if(modus!=="db" || !uid) return;""", """          daten: daten, zeit: jetzt});
+        sync = jetzt; lokalSichern();
+        if(typeof Team!=="undefined" && Team.frisch) Team.frisch();
+      }catch(e){}
+  }
+
+  async function dbSichern(){
+    if(modus!=="db" || !uid) return;""")
+
+# Freier Name («Andere Person»): zuerst den Stand dieses Namens holen
+ersetze("""  tippUhr = setTimeout(function(){
+    Speicher.person = ""; Speicher.kuerzel = v;
+    Speicher.sichern();""", """  tippUhr = setTimeout(function(){
+    Speicher.person = ""; Speicher.kuerzel = v;
+    Speicher.holeEigene().then(function(neu){
+      if(neu){ baueTage(); baueKarten(); baueWochen(); aktualisiere(false); }
+      Speicher.sichern();
+    });""")
+ersetze("""  Speicher.person = ""; Speicher.kuerzel = v;
+  Speicher.sichern(); zeigeKuerzel();
+});""", """  if(Speicher.kuerzel === v && !Speicher.person) { zeigeKuerzel(); return; }
+  Speicher.person = ""; Speicher.kuerzel = v;
+  Speicher.holeEigene().then(function(neu){
+    if(neu){ baueTage(); baueKarten(); baueWochen(); aktualisiere(false); }
+    Speicher.sichern(); zeigeKuerzel();
+  });
+});""")
 
 ziel.write_text(s, encoding="utf-8")
 print("geschrieben:", ziel, len(s), "Zeichen")

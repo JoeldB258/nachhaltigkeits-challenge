@@ -31,7 +31,12 @@ Alternative ohne GitHub: `npx netlify-cli deploy --prod` in diesem Ordner.
   Direkt: `https://<adresse>/api?action=export`
 * **Bild entfernen, das nicht passt:** Netlify → Projekt → **Blobs** → Store `challenge`,
   die Einträge `bild/<id>` und `bildmeta/<id>` löschen. Eigene Bilder kann jede Person selber löschen.
+* **Alle Bilder herunterladen:** Register «Bilder», unter der Galerie «Alle Bilder herunterladen (ZIP)».
+  Enthält alle Fotos in voller Qualität (Dateiname mit Nummer, Datum, Uhrzeit, Name) und
+  `bilder-liste.csv` mit den Beschreibungen. Funktioniert auch am Handy.
 * **Collage für LinkedIn:** Register «Bilder» → «Collage erzeugen».
+* **Mehrpersonen-Test gegen die echte Seite:** `node test/mehrpersonen.cjs https://<adresse>/`
+  (arbeitet nur mit Testnamen und räumt sie danach weg).
 
 ## Nach der Challenge (Datenschutz)
 

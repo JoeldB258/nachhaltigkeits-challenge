@@ -365,5 +365,109 @@ ersetze("""  Speicher.person = ""; Speicher.kuerzel = v;
   });
 });""")
 
+
+# ------------------------------------------------ Alle Bilder als ZIP
+ersetze('  <div class="galerie" id="galerie"></div>',
+        '  <div class="galerie" id="galerie"></div>\n'
+        '  <div class="zipzeile" id="zipZeile" hidden>\n'
+        '    <button class="knopf zweit" id="zipLaden" type="button">Alle Bilder herunterladen (ZIP)</button>\n'
+        '    <p class="uploadmeldung" id="zipStand" aria-live="polite"></p>\n'
+        '  </div>')
+ersetze('.exportzeile a{color:inherit}', '.exportzeile a{color:inherit}\n.zipzeile{margin:22px 0 0}')
+ersetze('      galerie.innerHTML=""; box.hidden=true;',
+        '      galerie.innerHTML=""; box.hidden=true; document.getElementById("zipZeile").hidden=true;')
+ersetze('    leer.hidden=true; box.hidden=false;',
+        '    leer.hidden=true; box.hidden=false; document.getElementById("zipZeile").hidden=false;')
+
+ersetze("""    document.getElementById("collageBauen").addEventListener("click", collage);""",
+        """    document.getElementById("zipLaden").addEventListener("click", alleAlsZip);
+    document.getElementById("collageBauen").addEventListener("click", collage);""")
+
+ersetze("""  function verdrahte(){""", r"""  /* ---- Alle Bilder als ZIP. Ohne Komprimierung (JPEG ist schon komprimiert),
+     darum reicht ein kleiner eigener ZIP-Schreiber, keine fremde Bibliothek. */
+  var CRC = (function(){ var t=[], c; for(var n=0;n<256;n++){ c=n;
+    for(var k=0;k<8;k++) c = (c&1) ? (0xEDB88320^(c>>>1)) : (c>>>1); t[n]=c>>>0; } return t; })();
+  function crc32(u){ var c=0xFFFFFFFF; for(var i=0;i<u.length;i++) c = CRC[(c^u[i])&0xFF]^(c>>>8); return (c^0xFFFFFFFF)>>>0; }
+  function dosZeit(d){
+    return { zeit: (d.getHours()<<11)|(d.getMinutes()<<5)|(Math.floor(d.getSeconds()/2)),
+             datum: ((d.getFullYear()-1980)<<9)|((d.getMonth()+1)<<5)|d.getDate() };
+  }
+  function zipBauen(dateien){
+    var teile=[], zentral=[], offset=0, enc=new TextEncoder();
+    dateien.forEach(function(f){
+      var name=enc.encode(f.name), crc=crc32(f.daten), n=f.daten.length, dz=dosZeit(f.wann||new Date());
+      var h=new DataView(new ArrayBuffer(30));
+      h.setUint32(0,0x04034b50,true); h.setUint16(4,20,true); h.setUint16(6,0x0800,true);
+      h.setUint16(8,0,true); h.setUint16(10,dz.zeit,true); h.setUint16(12,dz.datum,true);
+      h.setUint32(14,crc,true); h.setUint32(18,n,true); h.setUint32(22,n,true);
+      h.setUint16(26,name.length,true); h.setUint16(28,0,true);
+      teile.push(h.buffer, name, f.daten);
+      var z=new DataView(new ArrayBuffer(46));
+      z.setUint32(0,0x02014b50,true); z.setUint16(4,20,true); z.setUint16(6,20,true);
+      z.setUint16(8,0x0800,true); z.setUint16(10,0,true); z.setUint16(12,dz.zeit,true); z.setUint16(14,dz.datum,true);
+      z.setUint32(16,crc,true); z.setUint32(20,n,true); z.setUint32(24,n,true);
+      z.setUint16(28,name.length,true); z.setUint32(42,offset,true);
+      zentral.push(z.buffer, name);
+      offset += 30 + name.length + n;
+    });
+    var groesse = zentral.reduce(function(s,x){ return s + x.byteLength; }, 0);
+    var e=new DataView(new ArrayBuffer(22));
+    e.setUint32(0,0x06054b50,true); e.setUint16(8,dateien.length,true); e.setUint16(10,dateien.length,true);
+    e.setUint32(12,groesse,true); e.setUint32(16,offset,true);
+    return new Blob(teile.concat(zentral,[e.buffer]), {type:"application/zip"});
+  }
+  function bytesAus(dataUrl){
+    var b = atob(dataUrl.split(",")[1]||""), u = new Uint8Array(b.length);
+    for(var i=0;i<b.length;i++) u[i]=b.charCodeAt(i);
+    return u;
+  }
+  var zipLaeuft = false;
+  async function alleAlsZip(){
+    if(zipLaeuft || !eintraege.length) return;
+    zipLaeuft = true;
+    var knopf = document.getElementById("zipLaden"), stand = document.getElementById("zipStand");
+    knopf.disabled = true; stand.style.color = "#5C5C5C";
+    try{
+      var liste = eintraege.slice();
+      for(var i=0;i<liste.length;i++){
+        if(liste[i].jpg) continue;
+        stand.textContent = "Bild "+(i+1)+" von "+liste.length+" wird geladen.";
+        if(Speicher.modus==="api"){
+          var a = await Netz.holen("action=bild&id="+encodeURIComponent(liste[i].id));
+          if(a && a.jpg) liste[i].jpg = a.jpg;
+        }
+      }
+      stand.textContent = "ZIP wird gebaut.";
+      var z2 = function(n){ return String(n).padStart(2,"0"); };
+      var dateien = [], zeilen = [["Nr","Datei","Name","Datum","Beschreibung"]];
+      liste.slice().sort(function(a,b){ return a.zeit-b.zeit; }).forEach(function(e, i){
+        if(!/^data:image\/jpeg;base64,/.test(e.jpg||"")) return;
+        var d = new Date(e.zeit);
+        var datei = z2(i+1) + "_" + d.getFullYear()+"-"+z2(d.getMonth()+1)+"-"+z2(d.getDate())
+          + "_" + z2(d.getHours())+z2(d.getMinutes()) + "_" + (slug(e.kuerzel)||"bild") + ".jpg";
+        dateien.push({name: datei, daten: bytesAus(e.jpg), wann: d});
+        zeilen.push([i+1, datei, e.kuerzel, d.toLocaleString("de-CH"), e.text||""]);
+      });
+      var csv = "﻿" + zeilen.map(function(z){
+        return z.map(function(f){ var t=String(f==null?"":f); if(/^[=+\-@]/.test(t)) t="'"+t;
+          return '"'+t.replace(/"/g,'""')+'"'; }).join(";");
+      }).join("\r\n");
+      dateien.push({name: "bilder-liste.csv", daten: new TextEncoder().encode(csv), wann: new Date()});
+      var blob = zipBauen(dateien);
+      var url = URL.createObjectURL(blob), a2 = document.createElement("a");
+      a2.href = url; a2.download = "nachhaltigkeits-challenge-bilder.zip";
+      document.body.appendChild(a2); a2.click(); a2.remove();
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 60000);
+      stand.textContent = (dateien.length-1) + " Bilder heruntergeladen ("
+        + (blob.size/1048576).toFixed(1).replace(".",",") + " MB).";
+    }catch(err){
+      stand.style.color = "#B00000";
+      stand.textContent = "Das Herunterladen hat nicht geklappt. Bitte nochmals versuchen.";
+    }
+    knopf.disabled = false; zipLaeuft = false;
+  }
+
+  function verdrahte(){""")
+
 ziel.write_text(s, encoding="utf-8")
 print("geschrieben:", ziel, len(s), "Zeichen")

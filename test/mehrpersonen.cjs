@@ -152,6 +152,21 @@ async function warteAufServer(p, kennung, bedingung, ms = 15000) {
   console.log("\n6) Auswertung");
   const csv = await (await carla.p.request.get(B + "api?action=export")).text();
   pruefe("CSV-Export enthält alle Testpersonen", Object.values(NAMEN).every((n) => csv.includes(n)));
+  const [dl] = await Promise.all([carla.p.waitForEvent("download", { timeout: 60000 }), carla.p.click("#zipLaden")]);
+  await dl.saveAs(OUT + "bilder.zip");
+  const { execSync } = require("child_process");
+  let zipOk = false, inhalt = "";
+  try {
+    execSync("unzip -tq " + OUT + "bilder.zip");
+    inhalt = execSync("unzip -Z1 " + OUT + "bilder.zip").toString().trim().split("\n");
+    zipOk = true;
+  } catch (e) { inhalt = [e.message]; }
+  const jpgs = zipOk ? inhalt.filter((n) => n.endsWith(".jpg")) : [];
+  const alleBilder = (await api(carla.p, "action=bilder")).bilder.length;
+  pruefe("ZIP ist gültig und enthält alle Bilder plus Liste", zipOk && jpgs.length === alleBilder && inhalt.includes("bilder-liste.csv"),
+    jpgs.length + " von " + alleBilder + ": " + jpgs.slice(0, 2).join(", "));
+  const echt = zipOk && execSync("cd " + OUT + " && rm -rf zipcheck && mkdir zipcheck && cd zipcheck && unzip -q ../bilder.zip && file " + jpgs[0]).toString();
+  pruefe("Bilder im ZIP sind echte JPEGs", /JPEG image/.test(echt || ""), (echt || "").split(":").pop().trim().slice(0, 40));
 
   console.log("\n7) Aufräumen");
   for (const n of Object.values(NAMEN)) {

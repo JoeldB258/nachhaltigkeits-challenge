@@ -1,0 +1,9 @@
+{
+  "name": "zt-nachhaltigkeits-challenge",
+  "private": true,
+  "type": "module",
+  "description": "Interne Nachhaltigkeits-Challenge Zug Tourismus, 9. bis 20. November 2026",
+  "dependencies": {
+    "@netlify/blobs": "11.1.4"
+  }
+}

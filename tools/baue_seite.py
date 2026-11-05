@@ -469,5 +469,223 @@ ersetze("""  function verdrahte(){""", r"""  /* ---- Alle Bilder als ZIP. Ohne K
 
   function verdrahte(){""")
 
+
+# ------------------------------------- Grosse Vorschau und «Meine Fotos»
+ersetze('        <p class="uploadmeldung" id="fotoTagMeldung" aria-live="polite"></p>\n',
+        '        <p class="uploadmeldung" id="fotoTagMeldung" aria-live="polite"></p>\n'
+        '        <div class="meinefotos" id="meineFotos" hidden>\n'
+        '          <p class="mfkopf">Meine Fotos <span id="mfAnzahl"></span></p>\n'
+        '          <div class="mfreihe" id="mfReihe"></div>\n'
+        '        </div>\n')
+ersetze('<div id="effekt" role="status" aria-live="polite" aria-hidden="true">',
+        '<div class="leuchte" id="leuchte" hidden role="dialog" aria-modal="true" aria-label="Bild gross ansehen">\n'
+        '  <div class="lkopf">\n'
+        '    <div class="linfo"><b id="lName"></b><span id="lZeit"></span></div>\n'
+        '    <button class="lzu" id="lZu" type="button" aria-label="Schliessen">&times;</button>\n'
+        '  </div>\n'
+        '  <div class="lbild">\n'
+        '    <button class="lpfeil links" id="lZurueck" type="button" aria-label="Vorheriges Bild">&#8249;</button>\n'
+        '    <img id="lImg" alt="">\n'
+        '    <button class="lpfeil rechts" id="lWeiter" type="button" aria-label="Nächstes Bild">&#8250;</button>\n'
+        '  </div>\n'
+        '  <p class="ltext" id="lText"></p>\n'
+        '  <div class="lknoepfe">\n'
+        '    <button class="knopf zweit" id="lLaden" type="button">Herunterladen</button>\n'
+        '    <button class="knopf lweg" id="lWeg" type="button">Löschen</button>\n'
+        '  </div>\n'
+        '  <p class="lzaehler" id="lZaehler"></p>\n'
+        '</div>\n\n'
+        '<div id="effekt" role="status" aria-live="polite" aria-hidden="true">')
+ersetze('.zipzeile{margin:22px 0 0}', '.zipzeile{margin:22px 0 0}\n'
+  '.bildkachel img{cursor:zoom-in}\n'
+  '.meinefotos{margin:14px 0 0}\n'
+  '.mfkopf{font-family:\'HND\',Arial,sans-serif;font-size:14px;margin:0 0 8px}\n'
+  '.mfkopf span{color:#5C5C5C}\n'
+  '.mfreihe{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}\n'
+  '.mfbild{position:relative;border-radius:10px;overflow:hidden;background:var(--flaeche);aspect-ratio:1/1}\n'
+  '.mfbild img{width:100%;height:100%;object-fit:cover;display:block;cursor:zoom-in}\n'
+  '.mfbild .weg{position:absolute;right:4px;top:4px;width:26px;height:26px;border:0;border-radius:50%;'
+  'background:rgba(0,0,0,.6);color:#fff;font-size:15px;line-height:26px;padding:0;cursor:pointer}\n'
+  '.leuchte{position:fixed;inset:0;z-index:9000;background:#0C121A;color:#fff;display:flex;'
+  'flex-direction:column;padding:max(14px,env(safe-area-inset-top)) 16px max(16px,env(safe-area-inset-bottom))}\n'
+  '.leuchte[hidden]{display:none}\n'
+  '.lkopf{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}\n'
+  '.linfo b{font-family:\'HND\',Arial,sans-serif;font-weight:normal;font-size:17px;display:block}\n'
+  '.linfo span{font-size:13px;opacity:.75}\n'
+  '.lzu{background:rgba(255,255,255,.14);border:0;color:#fff;width:44px;height:44px;border-radius:50%;'
+  'font-size:26px;line-height:44px;padding:0;cursor:pointer;flex:none}\n'
+  '.lbild{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;position:relative;margin:12px 0}\n'
+  '.lbild img{max-width:100%;max-height:100%;object-fit:contain;border-radius:10px;touch-action:pan-y}\n'
+  '.lpfeil{position:absolute;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.16);border:0;'
+  'color:#fff;width:44px;height:44px;border-radius:50%;font-size:30px;line-height:40px;padding:0;cursor:pointer}\n'
+  '.lpfeil.links{left:0}.lpfeil.rechts{right:0}\n'
+  '.ltext{text-align:center;margin:0 0 12px;font-size:15px;min-height:1px}\n'
+  '.lknoepfe{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}\n'
+  '.lknoepfe .knopf{min-width:150px}\n'
+  '.knopf.lweg{background:#C62828;color:#fff}\n'
+  '.lzaehler{text-align:center;font-size:12px;opacity:.6;margin:10px 0 0}')
+
+# weg() meldet zurück, ob gelöscht wurde
+ersetze("""  async function weg(id){
+    if(!window.confirm("Dieses Bild löschen?")) return;
+    try{
+      if(Speicher.modus==="api"){
+        var r = await Netz.senden({action:"bildWeg", id:id, kennung:Speicher.kennung()});
+        if(!r || !r.ok) throw new Error("weg");
+        await frischBilder();
+      }
+      else { await Speicher.db.doc("bilder/"+id).delete(); }
+    }catch(e){ meldung("Löschen hat nicht geklappt.", true); }
+  }""", """  async function weg(id){
+    if(!window.confirm("Dieses Bild löschen? Das lässt sich nicht rückgängig machen.")) return false;
+    try{
+      if(Speicher.modus==="api"){
+        var r = await Netz.senden({action:"bildWeg", id:id, kennung:Speicher.kennung()});
+        if(!r || !r.ok) throw new Error("weg");
+        eintraege = eintraege.filter(function(e){ return e.id!==id; });
+        zeichne();
+        await frischBilder();
+      }
+      else { await Speicher.db.doc("bilder/"+id).delete(); }
+      meldung("Bild gelöscht.");
+      return true;
+    }catch(e){ meldung("Löschen hat nicht geklappt.", true); return false; }
+  }""")
+
+ersetze('      galerie.innerHTML=""; box.hidden=true; document.getElementById("zipZeile").hidden=true;',
+        '      galerie.innerHTML=""; box.hidden=true; document.getElementById("zipZeile").hidden=true;\n'
+        '      meineZeichnen(); leuchteAuffrischen();')
+ersetze("""    galerie.innerHTML = html;
+    Array.prototype.forEach.call(galerie.querySelectorAll(".weg"), function(b){
+      b.addEventListener("click", function(){ weg(this.getAttribute("data-id")); });
+    });
+  }""", """    galerie.innerHTML = html;
+    Array.prototype.forEach.call(galerie.querySelectorAll(".weg"), function(b){
+      b.addEventListener("click", function(ev){ ev.stopPropagation(); weg(this.getAttribute("data-id")); });
+    });
+    Array.prototype.forEach.call(galerie.querySelectorAll(".bildkachel"), function(fig, i){
+      var bild = fig.querySelector("img");
+      if(bild && eintraege[i]){ var id = eintraege[i].id;
+        bild.addEventListener("click", function(){ leuchteAuf(id); }); }
+    });
+    meineZeichnen(); leuchteAuffrischen();
+  }""")
+
+ersetze("""  function verdrahte(){""", r"""  /* ---- «Meine Fotos» im Register Tag */
+  function istMeins(e){ var k = Speicher.uid || Speicher.kennung(); return !!k && e.uid === k; }
+  var JPG_OK = /^data:image\/jpeg;base64,[A-Za-z0-9+\/=]+$/;
+  function meineZeichnen(){
+    var box = document.getElementById("meineFotos"), reihe = document.getElementById("mfReihe");
+    if(!box || !reihe) return;
+    var meine = eintraege.filter(istMeins);
+    box.hidden = !meine.length;
+    document.getElementById("mfAnzahl").textContent = meine.length ? "("+meine.length+")" : "";
+    reihe.innerHTML = meine.map(function(e){
+      return '<div class="mfbild">'
+        + (JPG_OK.test(e.jpg||"") ? '<img src="'+e.jpg+'" alt="'+sicher(e.text||"Mein Foto")+'" data-id="'+e.id+'">'
+                                   : '<div class="platzhalter" style="width:100%;height:100%"></div>')
+        + '<button class="weg" type="button" data-id="'+e.id+'" title="Foto löschen" aria-label="Foto löschen">&times;</button></div>';
+    }).join("");
+    Array.prototype.forEach.call(reihe.querySelectorAll(".weg"), function(b){
+      b.addEventListener("click", function(){ weg(this.getAttribute("data-id")); });
+    });
+    Array.prototype.forEach.call(reihe.querySelectorAll("img"), function(b){
+      b.addEventListener("click", function(){ leuchteAuf(this.getAttribute("data-id")); });
+    });
+  }
+
+  /* ---- Grosse Vorschau mit Löschen, Herunterladen, Blättern */
+  var offenId = null;
+  function el2(id){ return document.getElementById(id); }
+  function leuchteAuf(id){
+    offenId = id;
+    el2("leuchte").hidden = false;
+    document.documentElement.style.overflow = "hidden";
+    leuchteAuffrischen();
+    try{ el2("lZu").focus(); }catch(e){}
+  }
+  function leuchteZu(){
+    offenId = null;
+    el2("leuchte").hidden = true;
+    document.documentElement.style.overflow = "";
+  }
+  function leuchteAuffrischen(){
+    if(offenId===null) return;
+    var i = -1;
+    for(var k=0;k<eintraege.length;k++) if(eintraege[k].id===offenId) i=k;
+    if(i<0){ leuchteZu(); return; }
+    var e = eintraege[i], d = new Date(e.zeit);
+    el2("lImg").src = JPG_OK.test(e.jpg||"") ? e.jpg : "";
+    el2("lImg").alt = e.text || ("Bild von " + e.kuerzel);
+    el2("lName").textContent = e.kuerzel;
+    el2("lZeit").textContent = d.getDate()+"."+(d.getMonth()+1)+"., "+String(d.getHours()).padStart(2,"0")
+      + ":" + String(d.getMinutes()).padStart(2,"0") + " Uhr";
+    el2("lText").textContent = e.text || "";
+    el2("lWeg").hidden = !istMeins(e);
+    el2("lZurueck").hidden = el2("lWeiter").hidden = eintraege.length < 2;
+    el2("lZaehler").textContent = (i+1) + " von " + eintraege.length;
+  }
+  function blaettern(schritt){
+    if(offenId===null || eintraege.length<2) return;
+    var i = 0;
+    for(var k=0;k<eintraege.length;k++) if(eintraege[k].id===offenId) i=k;
+    offenId = eintraege[(i+schritt+eintraege.length)%eintraege.length].id;
+    leuchteAuffrischen();
+  }
+  function einzelnLaden(){
+    var e = eintraege.filter(function(x){ return x.id===offenId; })[0];
+    if(!e || !JPG_OK.test(e.jpg||"")) return;
+    var d = new Date(e.zeit), z2 = function(n){ return String(n).padStart(2,"0"); };
+    var blob = new Blob([bytesAus(e.jpg)], {type:"image/jpeg"});
+    var url = URL.createObjectURL(blob), a = document.createElement("a");
+    a.href = url; a.download = d.getFullYear()+"-"+z2(d.getMonth()+1)+"-"+z2(d.getDate())+"_"
+      + z2(d.getHours())+z2(d.getMinutes())+"_"+(slug(e.kuerzel)||"bild")+".jpg";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 60000);
+  }
+  function leuchteVerdrahten(){
+    el2("lZu").addEventListener("click", leuchteZu);
+    el2("lZurueck").addEventListener("click", function(){ blaettern(-1); });
+    el2("lWeiter").addEventListener("click", function(){ blaettern(1); });
+    el2("lLaden").addEventListener("click", einzelnLaden);
+    el2("lWeg").addEventListener("click", async function(){
+      var id = offenId; if(!id) return;
+      var nachher = null;
+      for(var k=0;k<eintraege.length;k++) if(eintraege[k].id===id && eintraege.length>1)
+        nachher = eintraege[(k+1)%eintraege.length].id;
+      if(await weg(id)){ if(nachher){ offenId = nachher; leuchteAuffrischen(); } else leuchteZu(); }
+    });
+    el2("leuchte").addEventListener("click", function(ev){
+      if(ev.target === this || ev.target.classList.contains("lbild")) leuchteZu();
+    });
+    document.addEventListener("keydown", function(ev){
+      if(offenId===null) return;
+      if(ev.key==="Escape") leuchteZu();
+      else if(ev.key==="ArrowLeft") blaettern(-1);
+      else if(ev.key==="ArrowRight") blaettern(1);
+    });
+    var startX = null;
+    el2("lImg").addEventListener("touchstart", function(ev){ startX = ev.touches[0].clientX; }, {passive:true});
+    el2("lImg").addEventListener("touchend", function(ev){
+      if(startX===null) return;
+      var dx = ev.changedTouches[0].clientX - startX; startX = null;
+      if(Math.abs(dx) > 50) blaettern(dx < 0 ? 1 : -1);
+    });
+  }
+
+  function verdrahte(){""")
+
+ersetze("""    document.getElementById("zipLaden").addEventListener("click", alleAlsZip);""",
+        """    document.getElementById("zipLaden").addEventListener("click", alleAlsZip);
+    leuchteVerdrahten();""")
+
+# Bei Namenswechsel «Meine Fotos» sofort anpassen
+ersetze("""  vorschau.innerHTML = name ? avatarHtml(Speicher.person, name) : "";
+  standText();
+}""", """  vorschau.innerHTML = name ? avatarHtml(Speicher.person, name) : "";
+  standText();
+  if(typeof Bilder !== "undefined" && Bilder && Bilder.zeichne) Bilder.zeichne();
+}""")
+
 ziel.write_text(s, encoding="utf-8")
 print("geschrieben:", ziel, len(s), "Zeichen")

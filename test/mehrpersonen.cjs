@@ -56,7 +56,11 @@ async function warteAufServer(p, kennung, bedingung, ms = 15000) {
 }
 
 (async () => {
-  const browser = await chromium.launch();
+  /* In abgeschotteten Umgebungen (z.B. Cloud-Session mit Proxy) den Proxy
+     nutzen, aber nur für die echte Seite, nicht für localhost. */
+  const proxy = !/localhost|127\.0\.0\.1/.test(B) && process.env.HTTPS_PROXY
+    ? { server: process.env.HTTPS_PROXY } : undefined;
+  const browser = await chromium.launch(proxy ? { proxy } : {});
   const gen = await browser.newPage();
   await gen.setViewportSize({ width: 1600, height: 1200 });
   await gen.setContent('<div style="width:1600px;height:1200px;background:linear-gradient(45deg,#17A600,#006BF2);color:#fff;font:bold 160px sans-serif;padding:200px;box-sizing:border-box">Testbild</div>');

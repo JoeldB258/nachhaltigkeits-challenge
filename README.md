@@ -29,12 +29,16 @@ Alternative ohne GitHub: `npx netlify-cli deploy --prod` in diesem Ordner.
 
 * **Auswertung:** Register «Team», ganz unten «Stand als Tabelle (CSV) herunterladen».
   Direkt: `https://<adresse>/api?action=export`
-* **Bild entfernen, das nicht passt:** Netlify → Projekt → **Blobs** → Store `challenge`,
-  die Einträge `bild/<id>` und `bildmeta/<id>` löschen. Eigene Bilder kann jede Person selber löschen.
 * **Alle Bilder herunterladen:** Register «Bilder», unter der Galerie «Alle Bilder herunterladen (ZIP)».
   Enthält alle Fotos in voller Qualität (Dateiname mit Nummer, Datum, Uhrzeit, Name) und
   `bilder-liste.csv` mit den Beschreibungen. Funktioniert auch am Handy.
 * **Collage für LinkedIn:** Register «Bilder» → «Collage erzeugen».
+* **LinkedIn-Beitrag:** Register «Team», ganz unten «LinkedIn-Beitrag erstellen». Entwurf mit den
+  aktuellen Teamzahlen (ohne Namen), drei Tonalitäten, CO₂-Schätzung zuschaltbar, Knopf zum Kopieren.
+  Die CO₂-Zahl ist eine vorsichtige Schätzung (Faktoren mobitool und ESU-services) und gehört im Text
+  immer als «rund» und «geschätzt» bezeichnet.
+* **Bilder löschen:** Alle im Team dürfen jedes Bild löschen (× in der Galerie, in «Meine Fotos»
+  oder in der grossen Ansicht). Vor dem Löschen kommt eine Rückfrage.
 * **Mehrpersonen-Test gegen die echte Seite:** `node test/mehrpersonen.cjs https://<adresse>/`
   (arbeitet nur mit Testnamen und räumt sie danach weg).
 

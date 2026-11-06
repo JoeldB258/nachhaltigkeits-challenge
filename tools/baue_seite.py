@@ -687,5 +687,187 @@ ersetze("""  vorschau.innerHTML = name ? avatarHtml(Speicher.person, name) : "";
   if(typeof Bilder !== "undefined" && Bilder && Bilder.zeichne) Bilder.zeichne();
 }""")
 
+
+# ------------------------------------- Jeder darf jedes Bild löschen
+ersetze("""        + (e.uid===(Speicher.uid||Speicher.kennung()) ? '<button class="weg" type="button" data-id="'+e.id+'" title="Bild löschen" aria-label="Bild löschen">&times;</button>' : '')""",
+        """        + '<button class="weg" type="button" data-id="'+e.id+'" title="Bild löschen" aria-label="Bild löschen">&times;</button>'""")
+ersetze('    el2("lWeg").hidden = !istMeins(e);', '    el2("lWeg").hidden = false;')
+ersetze('Dein eigenes Bild kannst du jederzeit selber entfernen.',
+        'Ein Bild lässt sich jederzeit mit dem × oder in der grossen Ansicht wieder löschen.')
+ersetze('    if(!window.confirm("Dieses Bild löschen? Das lässt sich nicht rückgängig machen.")) return false;',
+        '    var wem = eintraege.filter(function(x){ return x.id===id; })[0];\n'
+        '    var frage = (wem && !istMeins(wem)) ? "Dieses Bild von "+wem.kuerzel+" löschen?" : "Dieses Bild löschen?";\n'
+        '    if(!window.confirm(frage+" Das lässt sich nicht rückgängig machen.")) return false;')
+
+# ------------------------------------- LinkedIn-Beitrag aus den Teamzahlen
+ersetze('  <p class="exportzeile">Für die Auswertung: <a href="/api?action=export" download>Stand als Tabelle (CSV) herunterladen</a></p>',
+        '  <p class="exportzeile">Für die Auswertung: <a href="/api?action=export" download>Stand als Tabelle (CSV) herunterladen</a></p>\n'
+        '  <details class="linkedin" id="linkedin">\n'
+        '    <summary>LinkedIn-Beitrag erstellen</summary>\n'
+        '    <p class="klein">Für die Kommunikation: ein Entwurf mit den aktuellen Zahlen des ganzen Teams, ohne Namen und ohne Rangliste. '
+        'Text anpassen und kopieren. Collage und Fotos gibt es im Register «Bilder».</p>\n'
+        '    <div class="lizahlen" id="liZahlen"></div>\n'
+        '    <div class="listeuer">\n'
+        '      <label>Tonalität <select id="liTon">'
+        '<option value="persoenlich">Persönlich</option>'
+        '<option value="sachlich">Sachlich mit Zahlen</option>'
+        '<option value="kurz">Kurz</option></select></label>\n'
+        '      <label class="lihaken"><input type="checkbox" id="liCo2" checked> CO₂-Schätzung erwähnen</label>\n'
+        '    </div>\n'
+        '    <textarea id="liText" rows="18" aria-label="Entwurf LinkedIn-Beitrag"></textarea>\n'
+        '    <p class="liknoepfe"><button class="knopf" id="liKopie" type="button">Text kopieren</button>\n'
+        '      <button class="knopf zweit" id="liNeu" type="button">Mit aktuellen Zahlen neu erzeugen</button></p>\n'
+        '    <p class="uploadmeldung" id="liStand" aria-live="polite"></p>\n'
+        '    <p class="klein lihinweis">Zur CO₂-Zahl: grobe, vorsichtige Schätzung. Verglichen wird mit dem Arbeitsweg allein im Auto '
+        '(Schweizer Durchschnitt 14,5 km einfach) und einem Fleischmenü. Der öffentliche Verkehr ist mit dem Buswert gerechnet, '
+        'Homeoffice ohne Ersparnis, Geschäftstermine mit der kürzesten Strecke (Baar). Faktoren: mobitool und ESU-services, siehe «Wissenswertes». '
+        'Im Beitrag immer als «rund» und «geschätzt» stehen lassen.</p>\n'
+        '  </details>')
+
+ersetze('.zipzeile{margin:22px 0 0}', '.zipzeile{margin:22px 0 0}\n'
+  '.linkedin{margin:22px 0 0;max-width:820px;border:1px solid var(--linie);border-radius:var(--r);padding:0 18px}\n'
+  '.linkedin summary{font-family:\'HND\',Arial,sans-serif;font-size:17px;padding:16px 0;cursor:pointer}\n'
+  '.linkedin[open]{padding-bottom:18px}\n'
+  '.lizahlen{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin:14px 0}\n'
+  '.lizahlen div{background:var(--flaeche);border-radius:12px;padding:12px}\n'
+  '.lizahlen b{font-family:\'HND\',Arial,sans-serif;font-weight:normal;font-size:22px;display:block}\n'
+  '.lizahlen span{font-size:12px;color:#5C5C5C}\n'
+  '.listeuer{display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin:0 0 10px;font-size:14px}\n'
+  '.listeuer select{font:inherit;font-size:16px;padding:6px 8px;border:1px solid var(--linie);border-radius:8px;margin-left:6px;background:#fff}\n'
+  '.lihaken input{margin-right:6px}\n'
+  '#liText{width:100%;box-sizing:border-box;font:inherit;font-size:15px;line-height:1.5;padding:12px;border:1px solid var(--linie);border-radius:10px;resize:vertical}\n'
+  '.liknoepfe{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0 0}\n'
+  '.lihinweis{margin-top:10px;color:#5C5C5C}')
+
+ersetze("function statusZeigen(){", r"""/* ======================================================= LinkedIn-Beitrag */
+var LinkedIn = (function(){
+  var z = null;
+  function el(id){ return document.getElementById(id); }
+  function zahl(n){ return Math.round(n).toLocaleString("de-CH"); }
+  function rechne(z){
+    var w = z.weg, pendel = w.velo + w.oev + w.mit + w.auto;
+    /* kg CO2e weniger pro Tag gegenüber Auto allein (8,29 kg) bzw. Fleischmenü (3,6 kg) */
+    var co2 = w.velo*8.13 + w.oev*4.66 + w.mit*4.15 + z.dienst.ohne*2.23 + z.essen.vegi*1.9;
+    return {
+      personen: z.personen, tage: z.tage,
+      anteil: pendel ? Math.round((w.velo + w.oev) / pendel * 100) : 0,
+      pendel: pendel, velo: w.velo, oev: w.oev, home: w.home,
+      ohneAuto: z.dienst.ohne, vegi: z.essen.vegi, mehrweg: z.essen.mehrweg,
+      treppe: z.sozial.treppe, zusammen: z.sozial.zusammen, zuger: z.woche.zuger,
+      repariert: z.woche.repariert, bilder: z.bilder,
+      schnitt: z.tage ? (z.oeko / z.tage) : 0,
+      co2: Math.round(co2 / 10) * 10, km: Math.round(co2 / 0.2858 / 10) * 10
+    };
+  }
+  function zeile(bed, text){ return bed ? text + "\n" : ""; }
+  function mz(n, eins, viele){ return n + " " + (n === 1 ? eins : viele); }
+  function entwurf(k, ton, mitCo2){
+    var zr = ZEITRAUM_TEXT.replace(/ 2026$/, "");
+    var co2 = mitCo2 && k.co2 >= 10;
+    if(ton === "kurz"){
+      return k.personen + " Mitarbeitende, " + k.tage + " Arbeitstage, eine gemeinsame Challenge 🌱\n\n"
+        + (k.pendel ? k.anteil + " % unserer Arbeitswege mit Velo, zu Fuss oder ÖV" : "")
+        + (k.pendel && k.vegi ? " und " : "") + (k.vegi ? mz(k.vegi, "fleischloses Mittagessen", "fleischlose Mittagessen") : "") + ".\n"
+        + zeile(co2, "Zusammen geschätzt rund " + zahl(k.co2) + " kg CO₂e weniger.")
+        + "\nDanke, Team Zug Tourismus! 💚\n\n#Nachhaltigkeit #ZugTourismus #Zug";
+    }
+    if(ton === "sachlich"){
+      return "Interne Nachhaltigkeits-Challenge bei Zug Tourismus: die Bilanz nach zwei Wochen\n\n"
+        + "Vom " + zr + " hat unser Team täglich erfasst, wie nachhaltig der Arbeitstag war: Arbeitsweg, "
+        + "Geschäftstermine, Mittagessen und Bürogewohnheiten.\n\nDie Zahlen:\n"
+        + "• " + k.personen + " Mitarbeitende an insgesamt " + k.tage + " Arbeitstagen\n"
+        + zeile(k.pendel, "• " + k.anteil + " % der Arbeitswege mit Velo, zu Fuss oder öffentlichem Verkehr")
+        + zeile(k.home, "• " + mz(k.home, "Tag", "Tage") + " im Homeoffice")
+        + zeile(k.ohneAuto, "• " + mz(k.ohneAuto, "Geschäftstermin", "Geschäftstermine") + " ohne eigenes Auto erledigt")
+        + zeile(k.vegi, "• " + mz(k.vegi, "fleischloses Mittagessen", "fleischlose Mittagessen") + (k.mehrweg ? ", " + k.mehrweg + " Mal ohne Einwegverpackung" : ""))
+        + zeile(k.treppe, "• " + k.treppe + " Mal Treppe statt Lift")
+        + "• Im Schnitt " + k.schnitt.toFixed(1).replace(".", ",") + " von 12 möglichen Punkten pro Tag (Tagesziel 8)\n"
+        + zeile(co2, "• Geschätzt rund " + zahl(k.co2) + " kg CO₂e weniger als mit Auto und Fleischmenü, "
+            + "so viel wie rund " + zahl(k.km) + " km allein im Auto")
+        + "\nDie Punkte sind nach Wirkung gewichtet, gestützt auf Schweizer Emissionsfaktoren (mobitool, ESU-services). "
+        + "Der Arbeitsweg ist der grösste Hebel und zählt deshalb am meisten.\n\n"
+        + "Nachhaltigkeit beginnt im eigenen Betrieb. Wir bleiben dran.\n\n"
+        + "#Nachhaltigkeit #ZugTourismus #Tourismus #Klimaschutz #Zug";
+    }
+    return k.personen + " Mitarbeitende, " + k.tage + " erfasste Arbeitstage, zwei Wochen: Unsere erste interne "
+      + "Nachhaltigkeits-Challenge bei Zug Tourismus ist abgeschlossen. 🌱\n\n"
+      + "Vom " + zr + " haben wir jeden Abend festgehalten, wie nachhaltig unser Arbeitstag war. Kein Wettbewerb, "
+      + "sondern ein ehrlicher Blick auf die eigenen Gewohnheiten.\n\nDas ist dabei herausgekommen:\n"
+      + zeile(k.pendel, "🚆 " + k.anteil + " % unserer Arbeitswege mit Velo, zu Fuss oder ÖV")
+      + zeile(k.vegi, "🥗 " + mz(k.vegi, "fleischloses Mittagessen", "fleischlose Mittagessen"))
+      + zeile(k.treppe, "🪜 " + k.treppe + " Mal Treppe statt Lift")
+      + zeile(k.zusammen, "🤝 " + mz(k.zusammen, "gemeinsame Mittagspause", "gemeinsame Mittagspausen"))
+      + zeile(k.zuger, "🛍️ " + k.zuger + " Mal bewusst bei Zuger Betrieben gegessen oder eingekauft")
+      + zeile(k.bilder, "📸 " + mz(k.bilder, "Foto", "Fotos") + " aus unserem Arbeitsalltag")
+      + (co2 ? "\nNach vorsichtiger Schätzung sind das rund " + zahl(k.co2) + " kg CO₂e weniger als mit Auto und "
+          + "Fleischmenü. Das entspricht rund " + zahl(k.km) + " km allein im Auto.\n" : "")
+      + "\nWas wir mitnehmen: Die grösste Wirkung hat der Arbeitsweg. Die kleinen Gewohnheiten im Büro zählen "
+      + "trotzdem, weil sie sichtbar machen, worauf es ankommt.\n\n"
+      + "Nachhaltigkeit ist für uns als Destination ein Kernthema. Wir wollen sie auch im eigenen Arbeitsalltag "
+      + "leben. Danke ans ganze Team fürs Mitmachen! 💚\n\n"
+      + "#Nachhaltigkeit #ZugTourismus #Teamkultur #Zug";
+  }
+  function kacheln(k){
+    var t = [[k.personen, "Personen dabei"], [k.tage, "Arbeitstage erfasst"],
+             [k.anteil + " %", "Arbeitswege Velo, zu Fuss, ÖV"], [k.vegi, "fleischlose Mittagessen"],
+             [k.treppe, "Mal Treppe statt Lift"], [k.bilder, "Fotos"],
+             ["≈ " + zahl(k.co2) + " kg", "CO₂e weniger (Schätzung)"]];
+    el("liZahlen").innerHTML = t.map(function(x){
+      return "<div><b>" + sicher(String(x[0])) + "</b><span>" + sicher(x[1]) + "</span></div>"; }).join("");
+  }
+  function erzeuge(){
+    var stand = el("liStand");
+    if(!z){ return; }
+    if(!z.personen){
+      el("liZahlen").innerHTML = "";
+      el("liText").value = "";
+      stand.style.color = "#5C5C5C";
+      stand.textContent = "Noch keine Einträge. Der Entwurf entsteht, sobald das Team Tage erfasst hat.";
+      return;
+    }
+    var k = rechne(z);
+    kacheln(k);
+    el("liText").value = entwurf(k, el("liTon").value, el("liCo2").checked);
+    stand.style.color = "#5C5C5C";
+    stand.textContent = "Stand der Zahlen: " + new Date().toLocaleString("de-CH", {dateStyle:"short", timeStyle:"short"}) + " Uhr";
+  }
+  async function laden(){
+    var stand = el("liStand");
+    if(Speicher.modus !== "api"){
+      stand.style.color = "#B00000";
+      stand.textContent = "Die Zahlen gibt es nur, wenn die Seite über den Team-Link geöffnet ist.";
+      return;
+    }
+    stand.style.color = "#5C5C5C"; stand.textContent = "Zahlen werden geholt.";
+    try{
+      var a = await Netz.holen("action=kennzahlen");
+      if(!a || !a.ok) throw new Error("kennzahlen");
+      z = a.kennzahlen; erzeuge();
+    }catch(e){
+      stand.style.color = "#B00000";
+      stand.textContent = "Die Zahlen liessen sich nicht laden. Bitte nochmals versuchen.";
+    }
+  }
+  function kopieren(){
+    var f = el("liText"), stand = el("liStand");
+    var fertig = function(gut){
+      stand.style.color = gut ? "#17A600" : "#B00000";
+      stand.textContent = gut ? "Text kopiert. Jetzt in LinkedIn einfügen." : "Kopieren hat nicht geklappt, bitte von Hand markieren.";
+    };
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(f.value).then(function(){ fertig(true); }, function(){
+        try{ f.select(); fertig(document.execCommand("copy")); }catch(e){ fertig(false); } });
+    } else { try{ f.select(); fertig(document.execCommand("copy")); }catch(e){ fertig(false); } }
+  }
+  el("linkedin").addEventListener("toggle", function(){ if(this.open) laden(); });
+  el("liNeu").addEventListener("click", laden);
+  el("liTon").addEventListener("change", erzeuge);
+  el("liCo2").addEventListener("change", erzeuge);
+  el("liKopie").addEventListener("click", kopieren);
+  return {laden: laden, entwurf: entwurf, rechne: rechne};
+})();
+
+function statusZeigen(){""")
+
 ziel.write_text(s, encoding="utf-8")
 print("geschrieben:", ziel, len(s), "Zeichen")

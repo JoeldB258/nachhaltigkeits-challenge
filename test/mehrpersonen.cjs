@@ -118,10 +118,8 @@ async function warteAufServer(p, kennung, bedingung, ms = 15000) {
   pruefe("Carla sieht beide Fotos live", gal.includes(NAMEN.anna) && gal.includes(NAMEN.beat));
   pruefe("Beschreibung wird angezeigt", gal.includes("Testbild mit Beschreibung"));
   const knoepfe = await carla.p.locator("#galerie .weg").count();
-  pruefe("Carla kann fremde Bilder nicht löschen (kein Knopf)", knoepfe === 0, knoepfe + " Knöpfe");
-  const annaBild = (await api(carla.p, "action=bilder")).bilder.find((b) => b.kennung === KENNUNG(NAMEN.anna));
-  const versuch = await post(carla.p, { action: "bildWeg", id: annaBild.id, kennung: KENNUNG(NAMEN.carla) });
-  pruefe("Server verweigert Löschen fremder Bilder", versuch.ok === false, versuch.fehler);
+  const bilderTotal = await carla.p.locator("#galerie .bildkachel").count();
+  pruefe("Jedes Bild hat einen Löschen-Knopf (alle dürfen löschen)", knoepfe === bilderTotal && knoepfe >= 2, knoepfe + " von " + bilderTotal);
   await carla.p.screenshot({ path: OUT + "live-bilder.png", fullPage: true });
 
   console.log("\n4) Gleiche Person auf zwei Geräten gleichzeitig");
@@ -172,7 +170,28 @@ async function warteAufServer(p, kennung, bedingung, ms = 15000) {
   const echt = zipOk && execSync("cd " + OUT + " && rm -rf zipcheck && mkdir zipcheck && cd zipcheck && unzip -q ../bilder.zip && file " + jpgs[0]).toString();
   pruefe("Bilder im ZIP sind echte JPEGs", /JPEG image/.test(echt || ""), (echt || "").split(":").pop().trim().slice(0, 40));
 
-  console.log("\n7) Aufräumen");
+  console.log("\n7) LinkedIn-Beitrag");
+  const kz = (await api(carla.p, "action=kennzahlen")).kennzahlen;
+  await carla.p.click("#rTeam");
+  await carla.p.locator("#linkedin summary").click();
+  await carla.p.waitForFunction(() => document.getElementById("liText").value.length > 50, null, { timeout: 15000 }).catch(() => {});
+  const li = await carla.p.inputValue("#liText");
+  pruefe("Entwurf enthält die Teamzahlen", li.includes(kz.personen + " Mitarbeitende") && li.includes(kz.tage + " erfasste Arbeitstage"),
+    kz.personen + " Personen, " + kz.tage + " Tage");
+  if (kz.personen === 3) pruefe("Anteil Arbeitswege Velo/zu Fuss/ÖV korrekt (4 von 5 = 80 %)", li.includes("80 % unserer Arbeitswege"));
+  pruefe("Keine Namen im Entwurf", !Object.values(NAMEN).some((n) => li.includes(n)));
+  pruefe("Keine Gedankenstriche im Entwurf", !/[–—]/.test(li));
+  await carla.p.selectOption("#liTon", "sachlich");
+  const li2 = await carla.p.inputValue("#liText");
+  pruefe("Tonalität sachlich wechselt den Text", li2.startsWith("Interne Nachhaltigkeits-Challenge") && li2.includes("Die Zahlen:"));
+  await carla.p.uncheck("#liCo2");
+  pruefe("CO₂-Zeile lässt sich abschalten", !(await carla.p.inputValue("#liText")).includes("CO₂e"));
+  await carla.p.check("#liCo2"); await carla.p.selectOption("#liTon", "persoenlich");
+  await carla.p.locator("#linkedin").scrollIntoViewIfNeeded();
+  await carla.p.screenshot({ path: OUT + "linkedin.png", fullPage: false });
+  require("fs").writeFileSync(OUT + "linkedin-entwurf.txt", await carla.p.inputValue("#liText"));
+
+  console.log("\n8) Aufräumen");
   for (const n of Object.values(NAMEN)) {
     const k = KENNUNG(n);
     const bilder = (await api(carla.p, "action=bilder")).bilder.filter((b) => b.kennung === k);

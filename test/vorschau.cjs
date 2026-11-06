@@ -52,7 +52,7 @@ const pruefe = (t, b, i) => { b ? ok++ : nok++; console.log((b ? "  OK   " : "  
   await anna.locator("#galerie .bildkachel img").nth(iBeat).click();
   await anna.waitForSelector("#leuchte:not([hidden])");
   pruefe("Vorschau öffnet sich gross", await anna.isVisible("#lImg"), await anna.textContent("#lName"));
-  pruefe("Bei fremdem Bild kein Löschen-Knopf", !(await anna.isVisible("#lWeg")));
+  pruefe("Auch bei fremdem Bild Löschen-Knopf (alle dürfen löschen)", await anna.isVisible("#lWeg"));
   await anna.screenshot({ path: OUT + "v2-vorschau-fremd.png" });
   // zu Annas Bild blättern
   for (let k = 0; k < namen.length && (await anna.textContent("#lName")) !== "Test Vorschau Anna"; k++) await anna.click("#lWeiter");

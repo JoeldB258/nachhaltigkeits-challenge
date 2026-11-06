@@ -869,5 +869,53 @@ var LinkedIn = (function(){
 
 function statusZeigen(){""")
 
+
+# ------------------------------------- Arbeitsweg: mehrere Verkehrsmittel
+ersetze('{ id:"weg", name:"Arbeitsweg", farbe:"var(--blau)", typ:"auswahl", max:5, zaehler:"oeko",',
+        '{ id:"weg", name:"Arbeitsweg", farbe:"var(--blau)", typ:"mehrfach", max:5, zaehler:"oeko",\n'
+        '    hinweis:"Mehrere möglich, zum Beispiel ÖV und Auto. Gezählt wird der Durchschnitt, halbe Punkte aufgerundet.",')
+ersetze("""  if(kat.typ==="auswahl") return w ? [w] : [];
+  return Array.isArray(w) ? w : [];
+}""", """  if(kat.typ==="auswahl") return w ? [w] : [];
+  if(Array.isArray(w)) return w;
+  return (typeof w === "string" && w) ? [w] : [];   /* ältere Einträge mit nur einem Wert */
+}
+/* Punkte einer Kategorie. «mehrfach»: Durchschnitt der gewählten Optionen,
+   halbe Punkte aufgerundet, damit Kombinieren nie mehr gibt als das Beste allein. */
+function katPunkte(eintrag, kat){
+  var sel = gewaehlt(eintrag, kat);
+  if(kat.typ==="schwelle") return (sel.length>=kat.schwelle) ? 1 : 0;
+  var p = 0;
+  for(var j=0;j<sel.length;j++)
+    for(var k=0;k<kat.optionen.length;k++)
+      if(kat.optionen[k].id===sel[j]) p += kat.optionen[k].wert;
+  if(kat.typ==="mehrfach" && sel.length) p = Math.round(p / sel.length);
+  return p;
+}""")
+ersetze("""    var sel=gewaehlt(eintrag,kat);
+    if(kat.typ==="schwelle"){ if(sel.length>=kat.schwelle) p+=1; continue; }
+    for(var j=0;j<sel.length;j++)
+      for(var k=0;k<kat.optionen.length;k++)
+        if(kat.optionen[k].id===sel[j]) p+=kat.optionen[k].wert;
+  }
+  return p;
+}""", """    p += katPunkte(eintrag, kat);
+  }
+  return p;
+}""")
+ersetze("""    var sel=gewaehlt(e,kat), p=0;
+    if(kat.typ==="schwelle"){ p = (sel.length>=kat.schwelle)?1:0; }
+    else for(var j=0;j<sel.length;j++)
+      for(var k=0;k<kat.optionen.length;k++)
+        if(kat.optionen[k].id===sel[j]) p+=kat.optionen[k].wert;""", """    var p = katPunkte(e, kat);""")
+ersetze('function istFertig(e){ return !!(e && e.weg && e.dienst); }',
+        'function istFertig(e){ return !!(e && gewaehlt(e, KATEGORIEN[0]).length && e.dienst); }')
+ersetze('      var wert = kat.typ==="auswahl" ? (o.wert>0?"+"+o.wert:"0") : (o.wert>0?"+"+o.wert:"");',
+        '      var wert = (kat.typ==="auswahl"||kat.typ==="mehrfach") ? (o.wert>0?"+"+o.wert:"0") : (o.wert>0?"+"+o.wert:"");')
+ersetze("""    var l = Array.isArray(e[kat.id]) ? e[kat.id] : [];
+    e[kat.id] = (l.indexOf(opt.id)!==-1) ? l.filter(function(x){return x!==opt.id;}) : l.concat(opt.id);""",
+        """    var l = gewaehlt(e, kat);
+    e[kat.id] = (l.indexOf(opt.id)!==-1) ? l.filter(function(x){return x!==opt.id;}) : l.concat(opt.id);""")
+
 ziel.write_text(s, encoding="utf-8")
 print("geschrieben:", ziel, len(s), "Zeichen")

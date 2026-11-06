@@ -1207,7 +1207,8 @@ var SCHLUESSEL = "zt-nachhaltigkeits-challenge-2026-v3";
 
 /* ---------------------------------------------------------------- Daten */
 var KATEGORIEN = [
-  { id:"weg", name:"Arbeitsweg", farbe:"var(--blau)", typ:"auswahl", max:5, zaehler:"oeko",
+  { id:"weg", name:"Arbeitsweg", farbe:"var(--blau)", typ:"mehrfach", max:5, zaehler:"oeko",
+    hinweis:"Mehrere möglich, zum Beispiel ÖV und Auto. Gezählt wird der Durchschnitt, halbe Punkte aufgerundet.",
     warum:"<b>Der grösste Hebel des Tages.</b> Gerechnet mit dem Schweizer Durchschnitts-Arbeitsweg von "
         + "14,5 km einfach, also 29 km pro Tag:"
         + "<table class='mini'>"
@@ -1582,18 +1583,27 @@ function wochenDaten(){ return Speicher.daten.wochen || (Speicher.daten.wochen={
 function gewaehlt(eintrag, kat){
   var w = eintrag ? eintrag[kat.id] : undefined;
   if(kat.typ==="auswahl") return w ? [w] : [];
-  return Array.isArray(w) ? w : [];
+  if(Array.isArray(w)) return w;
+  return (typeof w === "string" && w) ? [w] : [];   /* ältere Einträge mit nur einem Wert */
+}
+/* Punkte einer Kategorie. «mehrfach»: Durchschnitt der gewählten Optionen,
+   halbe Punkte aufgerundet, damit Kombinieren nie mehr gibt als das Beste allein. */
+function katPunkte(eintrag, kat){
+  var sel = gewaehlt(eintrag, kat);
+  if(kat.typ==="schwelle") return (sel.length>=kat.schwelle) ? 1 : 0;
+  var p = 0;
+  for(var j=0;j<sel.length;j++)
+    for(var k=0;k<kat.optionen.length;k++)
+      if(kat.optionen[k].id===sel[j]) p += kat.optionen[k].wert;
+  if(kat.typ==="mehrfach" && sel.length) p = Math.round(p / sel.length);
+  return p;
 }
 function punkteVon(eintrag){
   if(!eintrag) return 0;
   var p=0;
   for(var i=0;i<KATEGORIEN.length;i++){
     var kat=KATEGORIEN[i]; if(kat.zaehler!=="oeko") continue;
-    var sel=gewaehlt(eintrag,kat);
-    if(kat.typ==="schwelle"){ if(sel.length>=kat.schwelle) p+=1; continue; }
-    for(var j=0;j<sel.length;j++)
-      for(var k=0;k<kat.optionen.length;k++)
-        if(kat.optionen[k].id===sel[j]) p+=kat.optionen[k].wert;
+    p += katPunkte(eintrag, kat);
   }
   return p;
 }
@@ -1612,17 +1622,13 @@ function istErfasst(e){
   }
   return false;
 }
-function istFertig(e){ return !!(e && e.weg && e.dienst); }
+function istFertig(e){ return !!(e && gewaehlt(e, KATEGORIEN[0]).length && e.dienst); }
 function groessterAnteil(e){
   if(!e) return "";
   var bester="", wert=0;
   for(var i=0;i<KATEGORIEN.length;i++){
     var kat=KATEGORIEN[i]; if(kat.zaehler!=="oeko") continue;
-    var sel=gewaehlt(e,kat), p=0;
-    if(kat.typ==="schwelle"){ p = (sel.length>=kat.schwelle)?1:0; }
-    else for(var j=0;j<sel.length;j++)
-      for(var k=0;k<kat.optionen.length;k++)
-        if(kat.optionen[k].id===sel[j]) p+=kat.optionen[k].wert;
+    var p = katPunkte(e, kat);
     if(p>wert){ wert=p; bester=kat.name; }
   }
   return wert>0 ? bester : "";
@@ -1674,7 +1680,7 @@ function baueKarten(){
       var aus = sel.indexOf(o.id)!==-1;
       var b=document.createElement("button");
       b.className="opt"; b.setAttribute("aria-pressed", String(aus));
-      var wert = kat.typ==="auswahl" ? (o.wert>0?"+"+o.wert:"0") : (o.wert>0?"+"+o.wert:"");
+      var wert = (kat.typ==="auswahl"||kat.typ==="mehrfach") ? (o.wert>0?"+"+o.wert:"0") : (o.wert>0?"+"+o.wert:"");
       b.innerHTML='<span class="box '+(kat.typ==="auswahl"?"radio":"")+'"'
         + (aus?' style="background:'+kat.farbe+';"':'') + '></span>'
         + '<span class="label">'+o.label+'</span><span class="wert">'+wert+'</span>';
@@ -1694,7 +1700,7 @@ function schalte(kat,opt){
   var vorherZiel = punkteVon(e)>=TAGESZIEL;
   if(kat.typ==="auswahl"){ e[kat.id] = (e[kat.id]===opt.id) ? undefined : opt.id; }
   else{
-    var l = Array.isArray(e[kat.id]) ? e[kat.id] : [];
+    var l = gewaehlt(e, kat);
     e[kat.id] = (l.indexOf(opt.id)!==-1) ? l.filter(function(x){return x!==opt.id;}) : l.concat(opt.id);
   }
   var fertig = istFertig(e), punkte = punkteVon(e), ziel = punkte>=TAGESZIEL;

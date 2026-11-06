@@ -81,13 +81,19 @@ async function warteAufServer(p, kennung, bedingung, ms = 15000) {
   await tag(beat.p, 1); await tippe(beat.p, /Allein mit dem Auto/); await tippe(beat.p, /Keine Geschäftsreise/);
   const carla = await oeffne(browser, { viewport: { width: 1400, height: 900 } }, NAMEN.carla, "Carla Laptop");
   await tag(carla.p, 0); await tippe(carla.p, /Im Homeoffice/); await tippe(carla.p, /Keine Geschäftsreise/);
+  // Kombination wie bei Carmen: ÖV und Auto am selben Tag
+  await tag(carla.p, 1); await tippe(carla.p, /öffentlichen Verkehr/); await tippe(carla.p, /Allein mit dem Auto/);
+  await tippe(carla.p, /Keine Geschäftsreise/);
+  const gedrueckt = await carla.p.$$eval("#karten .karte:first-child .opt[aria-pressed=true] .label", (l) => l.map((x) => x.textContent));
+  pruefe("Arbeitsweg: ÖV und Auto gleichzeitig angekreuzt", gedrueckt.length === 2, gedrueckt.join(" + "));
+  pruefe("Kombination zählt Durchschnitt: (4+0)/2 + 2 = 4 Punkte", (await carla.p.textContent("#zahl")).trim() === "4", (await carla.p.textContent("#zahl")).trim());
 
   const sA = await warteAufServer(anna.p, KENNUNG(NAMEN.anna), (s) => s.oeko === 9);
   pruefe("Anna auf dem Server gespeichert: 9 Punkte, 1 Tag", sA && sA.oeko === 9 && sA.tage === 1, sA && sA.oeko + "P/" + sA.tage + "T");
   const sB = await warteAufServer(beat.p, KENNUNG(NAMEN.beat), (s) => s.tage === 2);
   pruefe("Beat gespeichert: 9 Punkte an 2 Tagen, Schnitt 4,5", sB && sB.oeko === 9 && sB.tage === 2 && sB.schnitt === 4.5, sB && sB.oeko + "P/" + sB.tage + "T/" + sB.schnitt);
-  const sC = await warteAufServer(carla.p, KENNUNG(NAMEN.carla), (s) => s.oeko === 4);
-  pruefe("Carla gespeichert: 4 Punkte", sC && sC.oeko === 4, sC && sC.oeko + "P");
+  const sC = await warteAufServer(carla.p, KENNUNG(NAMEN.carla), (s) => s.oeko === 8);
+  pruefe("Carla gespeichert: 8 Punkte an 2 Tagen", sC && sC.oeko === 8 && sC.tage === 2, sC && sC.oeko + "P/" + sC.tage + "T");
 
   console.log("\n2) Live-Ansicht Team");
   await carla.p.click("#rTeam");
@@ -178,7 +184,8 @@ async function warteAufServer(p, kennung, bedingung, ms = 15000) {
   const li = await carla.p.inputValue("#liText");
   pruefe("Entwurf enthält die Teamzahlen", li.includes(kz.personen + " Mitarbeitende") && li.includes(kz.tage + " erfasste Arbeitstage"),
     kz.personen + " Personen, " + kz.tage + " Tage");
-  if (kz.personen === 3) pruefe("Anteil Arbeitswege Velo/zu Fuss/ÖV korrekt (4 von 5 = 80 %)", li.includes("80 % unserer Arbeitswege"));
+  if (kz.personen === 3) pruefe("Anteil Arbeitswege korrekt, Kombi halb gezählt (4,5 von 6 = 75 %)", li.includes("75 % unserer Arbeitswege"),
+    "ÖV " + kz.weg.oev + ", Auto " + kz.weg.auto);
   pruefe("Keine Namen im Entwurf", !Object.values(NAMEN).some((n) => li.includes(n)));
   pruefe("Keine Gedankenstriche im Entwurf", !/[–—]/.test(li));
   await carla.p.selectOption("#liTon", "sachlich");
